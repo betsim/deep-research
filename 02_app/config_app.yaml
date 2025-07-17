@@ -1,0 +1,71 @@
+# Deep Research RRB Configuration
+
+# Environment and API settings
+api_keys:
+  dotenv_path: "/Volumes/1TB Home SSD/GitHub/.env_stat"
+
+# LLM Model choices
+models:
+  performance_low: "google/gemini-2.5-flash-lite-preview-06-17"
+  performance_medium: "google/gemini-2.5-flash"
+  performance_high: "google/gemini-2.5-pro"
+
+# Set all model calls to the cheapest and fastest model.
+# Also max_queries, search_limit, and autocut are set to low values for development.
+development:
+  enabled: false
+  model_for_dev_testing: "google/gemini-2.5-flash-lite-preview-06-17"
+
+# Temperature settings for the different tasks
+temperature:
+  low: 0.2 # Low temperature for document analysis and final report creation
+  base: 0.5
+  high: 1.0 # High temperature for query creation
+
+# LLM API settings
+llm:
+  system_message: "You are a helpful and excellent research assistant."
+  max_tokens: 60000 # This only works for Gemini models.
+  tenacity_wait_multiplier: 1
+  tenacity_wait_max: 10
+  tenacity_stop_attempts: 3
+  reasoning_effort: "medium" # Options: low, medium, high
+  token_count_model: "gpt-4o"
+
+parallelization:
+  max_workers: 25
+
+# Sentence Transformer settings
+sentence_transformers:
+  model_path: "intfloat/multilingual-e5-small"
+
+# Weaviate configuration
+weaviate:
+  collection_name: "KRP_STAZH"
+  port: 8080
+  grpc_port: 50051
+
+# Application settings
+app:
+  save_reports_to: "_reports/"
+  docs_file: "_data_input/02_KRP_selec.parq"
+  log_file: "_logs/deep-research.log"
+
+  max_iterations: 3 # Maximum iterations for the research process
+
+  # Settings for full quality research
+  max_queries: 20 # Maximum number of queries to generate with LLM per iteration
+  search_limit: 20 # Maximum number of documents to retrieve per query
+  # The autocut function limits results based on discontinuities in the result set. Specifically, autocut looks for discontinuities, or jumps, in result metrics such as vector distance or search score. Note: The parameter is named `auto_limit` in the Weaviate API.
+  # https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
+  search_auto_limit: 3
+
+  # Fast mode settings.
+  max_queries_fast: 5
+  search_limit_fast: 5
+  search_auto_limit_fast: 2
+
+  # Development settings.
+  max_queries_dev: 3
+  search_limit_dev: 2
+  search_auto_limit_dev: 1
