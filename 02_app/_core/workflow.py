@@ -23,8 +23,8 @@ class ResearchWorkflow:
         self.config = config
         self.workflow_config = workflow_config
         self.model_config = model_config
-        self.logger = custom_logger
         self.iterative_workflow = iterative_workflow
+        self.logger = custom_logger
         self._initialize_state()
 
     def _initialize_state(self) -> None:
@@ -46,8 +46,7 @@ class ResearchWorkflow:
         """Run a single iteration of the research workflow"""
 
         # Step 1: Create search queries
-        if status_callback:
-            status_callback("🧠 Erstelle Suchanfragen...", step_increment=1)
+        status_callback("🧠 Erstelle Suchanfragen...", step_increment=1)
 
         search_queries = create_queries(
             user_query,
@@ -61,7 +60,10 @@ class ResearchWorkflow:
 
         if len(search_queries) == 0:
             status_callback("❌ Keine Suchanfragen erstellt", step_increment=0)
-            return False, self.final_docs
+            return (
+                False,
+                self.final_docs if self.final_docs is not None else pd.DataFrame(),
+            )
 
         # Step 2: Execute searches
         status_callback(
@@ -81,7 +83,10 @@ class ResearchWorkflow:
 
         if len(search_results) == 0:
             status_callback("❌ Keine neuen Suchergebnisse gefunden", step_increment=0)
-            return False, self.final_docs
+            return (
+                False,
+                self.final_docs if self.final_docs is not None else pd.DataFrame(),
+            )
 
         # Step 3: Check relevance
         status_callback(
@@ -100,11 +105,14 @@ class ResearchWorkflow:
 
         if len(relevant_doc_ids) == 0:
             status_callback("❌ Keine relevanten Dokumente gefunden", step_increment=0)
-            return False, self.final_docs
+            return (
+                False,
+                self.final_docs if self.final_docs is not None else pd.DataFrame(),
+            )
 
         # Step 4: Analyze documents
         status_callback(
-            f"📊 Analysiere {len(relevant_doc_ids)} relevante Dokumente...",
+            f"📊 Analysiere {len(relevant_doc_ids)} relevante Dokumente im Volltext...",
             step_increment=1,
         )
 
@@ -127,7 +135,11 @@ class ResearchWorkflow:
             tmp_docs["analysis"] = analysis_results
             self.final_docs = pd.concat([self.final_docs, tmp_docs])
 
-        if not self.iterative_workflow:
+        # We do not analyze the task status if the iterative workflow is not enabled or if it's the last iteration.
+        if (
+            not self.iterative_workflow
+            or iteration == config["app"]["max_iterations"] - 1
+        ):
             status_callback("✅ Iteration abgeschlossen", step_increment=1)
             return True, self.final_docs
 

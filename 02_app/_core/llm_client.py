@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Iterator
+from typing import Optional, Dict, Any
 import os
+import requests
+import json
+from datetime import datetime
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from dotenv import load_dotenv
 from _core.config import config
 from _core.logger import custom_logger
+from _core.utils import TokenCounter
 
 
 try:
@@ -32,8 +36,8 @@ class LLMClient(ABC):
         pass
 
     @abstractmethod
-    def call_streamed(self, prompt: str, **kwargs) -> Iterator:
-        """Stream responses from the LLM."""
+    def call_with_reasoning(self, prompt: str, **kwargs) -> tuple[str, dict]:
+        """Call LLM API with reasoning parameters."""
         pass
 
 
@@ -78,7 +82,7 @@ class OpenRouterClient(LLMClient):
             completion = self.client.chat.completions.create(
                 model=model_id or config["models"]["performance_low"],
                 temperature=temperature or config["temperature"]["low"],
-                max_tokens=max_tokens or config["llm"]["max_tokens"],
+                max_tokens=max_tokens or config["llm"]["max_tokens_output"],
                 reasoning_effort=reasoning_effort,
                 messages=[{"role": "user", "content": prompt}],
                 **kwargs,
@@ -104,7 +108,7 @@ class OpenRouterClient(LLMClient):
             completion = self.client.chat.completions.create(
                 model=model_id or config["models"]["performance_low"],
                 temperature=temperature or config["temperature"]["low"],
-                max_tokens=max_tokens or config["llm"]["max_tokens"],
+                max_tokens=max_tokens or config["llm"]["max_tokens_output"],
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -126,32 +130,71 @@ class OpenRouterClient(LLMClient):
 
         return _call()
 
-    def call_streamed(
+    def call_with_reasoning(
         self,
         prompt: str,
         model_id: str = None,
         temperature: float = None,
         max_tokens: int = None,
-        **kwargs,
-    ) -> Iterator:
-        """Stream responses from OpenRouter."""
+    ) -> tuple[str, dict]:
+        """Call LLM API with reasoning parameters."""
+
+        # At the moment, only the Gemini 2.5 model support context lengths beyond 200k.
+        # Here we check if the model is not Gemini 2.5 and if the token count exceeds the fallback limit.
+        # If so, we switch to the fallback model.
+        if "google/gemini-2.5" not in model_id or config["models"]["performance_high"]:
+            token_count = TokenCounter.count_tokens(prompt)
+            if token_count > config["llm"]["fallback_token_limit"]:
+                custom_logger.info_console(
+                    f"Token count ({token_count}) exceeds fallback limit. Using fallback model."
+                )
+                model_id = config["models"]["fallback"]
 
         custom_logger.info_console(
-            f"Streaming response for prompt: {prompt[:50]}... (model: {model_id or config['models']['performance_low']})"
+            f"Calling API with prompt: {prompt[:200]}... (model: {model_id or config['models']['performance_high']})"
         )
 
-        @self._retry
-        def _stream():
-            return self.client.chat.completions.create(
-                model=model_id or config["models"]["performance_low"],
-                temperature=temperature or config["temperature"]["low"],
-                max_tokens=max_tokens or config["llm"]["max_tokens"],
-                stream=True,
-                messages=[{"role": "user", "content": prompt}],
-                **kwargs,
-            )
+        # Since the final call is costly, we do not retry it, if it fails.
+        # If you want to retry it, uncomment the decorator below.
+        # @self._retry
+        def _call_model():
+            try:
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                payload = {
+                    "model": model_id or config["models"]["performance_high"],
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": temperature or config["temperature"]["low"],
+                    "max_tokens": max_tokens or config["llm"]["max_tokens_output"],
+                    # Adjust this according to the model specifications. Details:
+                    # https://openrouter.ai/docs/use-cases/reasoning-tokens
+                    "reasoning": {
+                        "max_tokens": -1,
+                        # "effort": "high",
+                    },
+                }
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
+                response = requests.post(url, json=payload, headers=headers)
 
-        return _stream()
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                with open(
+                    f"{config['app']['save_final_docs_to']}response_{timestamp}.json",
+                    "w",
+                ) as f:
+                    json.dump(response.json(), f)
+
+                response = response.json()
+                usage = response.get("usage", {})
+                response = response["choices"][0]["message"]["content"]
+                return response, usage
+            except Exception as e:
+                custom_logger.info_console(f"Error during final reasoning: {e}")
+                return "", {}
+
+        response, usage = _call_model()
+        return response, usage
 
 
 class ClientManager:

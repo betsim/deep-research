@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from _core.logger import custom_logger
-from _core.prompts import INFO_TEXT
+from _core.app_info import INFO_TEXT_MODAL, INFO_TEXT_SIDEBAR, SAMPLE_QUERY
 from _core.workflow import ResearchWorkflow
 from _core.llm_processing import create_final_report
 from _core.utils import get_model_and_workflow_config, create_docx_from_markdown
@@ -18,19 +18,20 @@ def load_data():
     return pd.read_parquet(config["app"]["docs_file"])
 
 
-@st.dialog("Deep-Research-App", width="large")
+@st.dialog(config["app_name"], width="large")
 def info_dialog():
-    st.markdown(INFO_TEXT)
+    st.markdown(INFO_TEXT_MODAL)
 
 
 def main():
-    st.set_page_config(page_title="Deep Research", page_icon="🔍", layout="wide")
+    st.set_page_config(page_title=config["app_name"], page_icon="🔍", layout="wide")
 
     # Sidebar for configuration
     with st.sidebar:
-        st.title("🔍 Deep Research")
+        st.title(f"🔍 {config['app_name']}")
         st.markdown(
-            "Recherchewerkzeug für eigene Dokumentsammlungen.\n\n:red[Achtung: Dies ist ein experimenteller Prototyp. Gib nur als öffentlich klassifizierte Daten als Fragen ein. Die Ergebnisse können fehlerhaft oder unvollständig sein. **Überprüfe die Ergebnisse immer.**] \n\n Die Bearbeitung kann einige Minuten dauern, abhängig von der Komplexität der Anfrage und der Anzahl der relevanten Dokumente.\n\n"
+            INFO_TEXT_SIDEBAR,
+            unsafe_allow_html=True,
         )
         if st.button("Mehr zu dieser App"):
             info_dialog()
@@ -46,7 +47,9 @@ def main():
             )
             return
 
-        st.success(f"✅ {len(st.session_state.docs):,.0f} Dokumente geladen")
+        st.info(
+            f"✅ {len(st.session_state.docs):,.0f} Dokumente geladen. Die Daten reichen bis Stand {st.session_state.docs['date'].max().strftime('%d.%m.%Y')}."
+        )
         st.markdown("---")
 
         if "fast_mode" not in st.session_state:
@@ -69,7 +72,7 @@ def main():
 
     user_query = st.text_area(
         "Gib deine Frage ein...",
-        value="Was hat der Kantonsrat zu Steuern entschieden?",
+        value=SAMPLE_QUERY,
         label_visibility="visible",
         key="user_input",
         max_chars=2000,
@@ -103,7 +106,6 @@ def main():
     if "final_report" in st.session_state:
         display_results()
         if "interaction_logged" not in st.session_state:
-            st.session_state.interaction_logged = False
             log_interaction()
             st.session_state.interaction_logged = True
 
@@ -116,7 +118,7 @@ def log_interaction():
     elapsed_time = datetime.now() - st.session_state.start_time
     elapsed_time = np.round(elapsed_time.total_seconds(), 0)
     custom_logger.info(
-        f"{clean_query}\t{elapsed_time}s\t{st.session_state.fast_mode}\t{st.session_state.iterative_workflow}\t{len(st.session_state.search_queries)}\t{len(st.session_state.search_results)}\t{len(st.session_state.relevant_doc_ids)}"
+        f"{clean_query}\t{elapsed_time}s\t{st.session_state.fast_mode}\t{st.session_state.iterative_workflow}\t{len(st.session_state.search_queries)}\t{len(st.session_state.search_results)}\t{len(st.session_state.relevant_doc_ids)}\t{st.session_state.usage}"
     )
 
 
@@ -138,19 +140,19 @@ def process_query(
             "Iterative Recherche gestartet. Der Prozess wird falls nötig in mehreren Durchgängen durchgeführt."
         )
 
-    # Initialize progress tracking.
+    # Initialize progress tracking outside the loop
     progress_bar = st.progress(0)
     status_text_01 = st.empty()
 
-    # Progress tracking variables.
-    total_steps_per_iteration = 5  # 5 main steps in workflow.
+    # Progress tracking variables
+    total_steps_per_iteration = 5  # 5 main steps in workflow
     iteration_weight = (
         80 / config["app"]["max_iterations"]
-    )  # 80% for iterations, 20% for final report.
+    )  # 80% for iterations, 20% for final report
     step_weight = iteration_weight / total_steps_per_iteration
     current_step = 0
 
-    # Function to update status and progress.
+    # Function to update status and progress
     def update_status(message, step_increment=1):
         nonlocal current_step
         status_text_01.text(message)
@@ -159,7 +161,7 @@ def process_query(
             progress = min(int(current_step * step_weight), 80)
             progress_bar.progress(progress)
 
-    # Run research iterations.
+    # Run research iterations
     for loop_idx in range(config["app"]["max_iterations"]):
         custom_logger.info_console(
             f"Iteration {loop_idx + 1} von {config['app']['max_iterations']}"
@@ -176,7 +178,7 @@ def process_query(
                 step_increment=0,
             )
 
-        # Run iteration with status callback.
+        # Run iteration with status callback
         finished, final_docs = workflow.run_iteration(
             user_query, loop_idx, update_status
         )
@@ -200,39 +202,25 @@ def process_query(
                 step_increment=0,
             )
 
-    if final_docs is None:
+    if final_docs is None or len(final_docs) == 0:
         progress_bar.progress(100)
         st.error(
             "❌ Keine relevanten Dokumente gefunden. Bitte versuche eine andere Frage."
         )
         st.stop()
 
-    # Create final report.
-    update_status("📝 Erstelle Abschlussbericht...", step_increment=0)
+    # Create final report
     progress_bar.progress(85)
 
-    stream = create_final_report(
-        user_query, final_docs, model_id=model_config["final_report"]
-    )
+    with st.spinner(
+        "Ich schreibe den Abschlussbericht. Dies kann einige Minuten dauern..."
+    ):
+        final_report, usage = create_final_report(
+            user_query, final_docs, model_id=model_config["final_report"]
+        )
 
     placeholder = st.empty()
-    final_report = ""
-    # Stream output to show users that the process is progressing.
-    while True:
-        try:
-            chunk = next(stream)
-            if (
-                hasattr(chunk, "choices")
-                and chunk.choices
-                and chunk.choices[0].delta.content is not None
-            ):  # type: ignore
-                final_report += chunk.choices[0].delta.content.replace("ß", "ss")  # type: ignore
-                placeholder.markdown(f"### Recherchebericht\n\n{final_report}")
-        except StopIteration:
-            break
-        except Exception as e:
-            st.error(f"Fehler beim Streamen des Textes: {str(e)}")
-            break
+    placeholder.markdown(f"### Recherchebericht\n\n{final_report}")
 
     # Sometimes the LLMs fail in the last step, so we check if the final report is empty.
     if final_report.strip() == "":
@@ -245,16 +233,17 @@ def process_query(
     progress_bar.progress(100)
     placeholder.empty()
 
-    # Get detailed results from workflow to show in UI.
+    # Get results from workflow
     results = workflow.get_results()
 
-    # Set results to session state.
+    # Set results to session state
     st.session_state.user_query = user_query
     st.session_state.search_queries = results["search_queries"]
     st.session_state.search_results = results["search_results"]
     st.session_state.relevant_doc_ids = results["relevant_doc_ids"]
     st.session_state.final_docs = results["final_docs"]
     st.session_state.final_report = final_report
+    st.session_state.usage = usage
 
 
 def display_results():
@@ -290,18 +279,12 @@ def display_results():
         else:
             for idx, (_, row) in enumerate(st.session_state.final_docs.iterrows(), 1):
                 with st.expander(f"📄 Dokument {idx}: {row['title'][:100]}..."):
-                    col1, col2 = st.columns([1, 1])
-
-                    with col1:
-                        st.markdown(f"**Titel:** {row['title']}")
-                        st.markdown(f"**Datum:** {row['date']}")
-
-                    with col2:
-                        if "pdf_link" in row and pd.notna(row["pdf_link"]):
-                            st.markdown(
-                                f"**PDF:** [Link zum Dokument]({row['pdf_link']})"
-                            )
-
+                    st.markdown(f"**Titel:** {row['title']}")
+                    st.markdown(f"**Datum:** {row['date']}")
+                    if "link" in row and pd.notna(row["link"]):
+                        st.markdown(
+                            f"[Link zum Dokument]({row['link']})"
+                        )
                     if "analysis" in row and pd.notna(row["analysis"]):
                         st.markdown("**Analyse:**")
                         st.write(row["analysis"])

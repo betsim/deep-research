@@ -82,7 +82,7 @@ def get_model_and_workflow_config(fast_mode=False):
             "check_relevance": config["models"]["performance_low"],
             "analyze_documents": config["models"]["performance_medium"],
             "reflect_task": config["models"]["performance_medium"],
-            "final_report": config["models"]["performance_medium"],
+            "final_report": config["models"]["performance_high"],
         }
         workflow_config = {
             "max_queries": config["app"]["max_queries"],

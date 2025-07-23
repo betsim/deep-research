@@ -1,7 +1,8 @@
 import pandas as pd
 import json
 import re
-from typing import List, Iterator, Union, Dict, Any
+from datetime import datetime
+from typing import List, Union, Dict, Any
 from _core.config import config
 from _core.models import ReflectTask, RelevanceCheck
 from _core.logger import custom_logger
@@ -224,8 +225,8 @@ def reflect_task_status(
 def create_final_report(
     user_query: str,
     final_docs: pd.DataFrame,
-    model_id: str = config["models"]["performance_medium"],
-) -> Iterator[str]:
+    model_id: str = config["models"]["performance_high"],
+) -> tuple[str, dict]:
     """Generate a final research report from selected documents."""
     research_results = [
         DOCUMENT.format(
@@ -241,14 +242,17 @@ def create_final_report(
     custom_logger.info_console(
         f"Creating final report for query: {user_query} with {len(research_results)} documents."
     )
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    with open(f"{config['app']['save_final_docs_to']}final_docs_{timestamp}.json", "w") as f:
+        json.dump(research_results, f, indent=2)
 
     research_results_text = "\n\n".join(research_results)
 
-    return llm_client.call_streamed(
+    response, usage = llm_client.call_with_reasoning(
         prompt=RESEARCH_WRITER.format(
             user_query=user_query, research_results=research_results_text
         ),
         model_id=model_id,
         temperature=config["temperature"]["base"],
-        reasoning_effort=config["llm"]["reasoning_effort"],
     )
+    return response, usage

@@ -11,7 +11,7 @@
 - **Fast Mode** - Instantly generate a first draft or quick insights.
 - **DOCX Export** - Export your results as a well-formatted Microsoft Word document for review and sharing.
 
-### Why not use Deep Research functionality of commercial providers instead?
+### Why not use the Deep Research functionalities of commercial providers instead?
 
 - **Ensure only your documents are considered for answers** - Eliminate the risk of contamination from external sources or web content that could introduce irrelevant or inaccurate information into your research.
 - **Control the workflow and prompting** - Customize every step of the research process, from query generation to final report synthesis, without being locked into predefined workflows.
@@ -61,6 +61,7 @@ Edit `02_app/config_app.yaml` to adjust:
 - API endpoints and connection options
 - Embedding model settings
 - Max parallel LLM calls for speed
+- and several more parameters...
 
 **Restart the app after config changes.**
 
@@ -88,12 +89,17 @@ streamlit run main.py
 
 A sample open dataset is included in the `01_data/` directory to help you get started and demonstrate how to structure and index data for hybrid search.
 
-## Adapting to Your Data
+## Adapting to Your Use Case and Data
 
 - Check out the notebook `01_data/01_index_data.ipynb` to see how data is prepared and indexed as a Weaviate search index.
 - Copy the dataframe with your unchunked documents to `02_app/_data_input`. See example `02_KRP_selec.parq` as reference how this works.
-- Edit `prompts.py` to match your content and data schema.
-- Edit `main.py` to adapt the UI to your use case.
+- Edit these files to match your use case, content and data schema:
+  - `app_info.py`
+  - `llm_processing.py`
+  - `prompts.py`
+  - `search.py`
+  - `utils.py`
+- Edit `main.py` to adapt the UI to your needs.
 
 ## Project Information
 
@@ -114,7 +120,7 @@ Built from scratch (no agent frameworks or heavy abstractions), for maximum work
 - **Relevance Checking:** Check all retrieved chunks in parallel for relevance to the user's query using Gemini Flash 2.5.
 - **Full Document Analysis:** Analyze the full text of documents containing relevant chunks in parallel. Summarize findings with Gemini Flash 2.5.
 - **Iterative Workflow (optional):** If enabled by the user, check if there is sufficient insight to answer the question. Otherwise, start a new iteration: process more queries, check relevance, and gather new insights.
-- **Final Report Generation:** Use Gemini 2.5 Flash to synthesize all insight summaries and produce the final report.
+- **Final Report Generation:** Synthesize all insight summaries and produce the final report.
 
 ## Project Team
 
