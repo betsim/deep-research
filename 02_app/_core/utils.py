@@ -165,6 +165,12 @@ def create_docx_from_markdown(user_query, markdown_text):
             doc.add_heading(line[3:].strip(), level=2)
         elif line.startswith("### "):
             doc.add_heading(line[4:].strip(), level=3)
+        elif line.startswith("#### "):
+            doc.add_heading(line[5:].strip(), level=4)
+        elif line.startswith("##### "):
+            doc.add_heading(line[6:].strip(), level=5)
+        elif line.startswith("###### "):
+            doc.add_heading(line[7:].strip(), level=6)
         elif re.match(r"^- ", line):
             # Level 1 list with dash
             p = doc.add_paragraph(style="List Bullet")
