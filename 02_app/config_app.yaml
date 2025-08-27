@@ -32,7 +32,7 @@ models:
 # In development mode, set all model calls to the cheapest and fastest model.
 # Also max_queries, search_limit, and autocut are set to low values for development.
 development:
-  enabled: true
+  enabled: false
   model_for_dev_testing: "google/gemini-2.5-flash-lite-preview-06-17"
 
 # Temperature settings for the different tasks
@@ -69,7 +69,7 @@ app:
   save_reports_to: "_reports/"
   # Save all document analysis results to a separate folder before final report generation.
   save_final_docs_to: "_final_docs/"
-  docs_file: "_data_input/02_KRP_selec.parq"
+  docs_file: "02_app/_data_input/02_KRP_selec.parq"
   log_file: "_logs/deep-research.log"
 
   max_iterations: 3 # Maximum iterations for the research process

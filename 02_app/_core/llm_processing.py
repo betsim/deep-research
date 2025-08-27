@@ -19,6 +19,7 @@ from _core.prompts import (
 )
 from _core.models import SearchQueries
 from _core.utils import call_function_in_parallel
+from pathlib import Path
 
 llm_client = ClientManager().get_client(provider="openrouter")
 
@@ -242,9 +243,20 @@ def create_final_report(
     custom_logger.info_console(
         f"Creating final report for query: {user_query} with {len(research_results)} documents."
     )
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    with open(f"{config['app']['save_final_docs_to']}final_docs_{timestamp}.json", "w") as f:
-        json.dump(research_results, f, indent=2)
+
+    # Pfad aus der Config robust auflösen:
+    cfg_path = Path(config["app"]["save_final_docs_to"])
+    app_base = Path(__file__).resolve().parents[2]  # .../deep-research-urteile/
+    save_dir = cfg_path if cfg_path.is_absolute() else (app_base / cfg_path)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    out_file = (save_dir / f"final_docs_{timestamp}.json").resolve()
+    print(f"[DEBUG] Writing final docs to: {out_file}")
+
+    with out_file.open("w", encoding="utf-8") as f:
+        json.dump(research_results, f, indent=2, ensure_ascii=False)
 
     research_results_text = "\n\n".join(research_results)
 

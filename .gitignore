@@ -176,3 +176,5 @@ cython_debug/
 # Additional files to ignore
 .DS_Store
 *.docx
+
+_final_docs/
