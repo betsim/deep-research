@@ -24,6 +24,10 @@ class CustomLogger:
         )
 
         # File handler
+        import os
+        log_file = config["app"]["log_file"]
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        file_handler = logging.FileHandler(log_file, mode="a")
         file_handler = logging.FileHandler(config["app"]["log_file"], mode="a")
         file_handler.setFormatter(
             logging.Formatter("%(asctime)s \t %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
