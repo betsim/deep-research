@@ -4,7 +4,7 @@ app_name: "Deep Research"
 
 # Environment and API settings
 api_keys:
-  dotenv_path: "/.env"
+  dotenv_path: "../.env"
 
 # LLM Model choices
 models:
@@ -32,7 +32,7 @@ models:
 # In development mode, set all model calls to the cheapest and fastest model.
 # Also max_queries, search_limit, and autocut are set to low values for development.
 development:
-  enabled: false
+  enabled: true
   model_for_dev_testing: "google/gemini-2.5-flash-lite-preview-06-17"
 
 # Temperature settings for the different tasks
